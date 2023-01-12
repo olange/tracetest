@@ -1,16 +1,16 @@
-# OpenSearch
+# ElasticSearch
 
-If you want to use OpenSearch as the trace data store, you can configure Tracetest to fetch trace data from OpenSearch.
+If you want to use ElasticSearch as the trace data store, you can configure Tracetest to fetch trace data from ElasticSearch.
 
-You'll configure the OpenTelemetry Collector to receive traces from your system and then send them to OpenSearch via Data Prepper. And, you don't have to change your existing pipelines to do so.
+You'll configure the OpenTelemetry Collector to receive traces from your system and then send them to ElasticSearch via Elastic APM. And, you don't have to change your existing pipelines to do so.
 
 :::tip
 Examples of configuring Tracetest can be found in the [`examples` folder of the Tracetest GitHub repo](https://github.com/kubeshop/tracetest/tree/main/examples). 
 :::
 
-## Configure OpenTelemetry Collector to Send Traces to OpenSearch
+## Configure OpenTelemetry Collector to Send Traces to ElasticSearch
 
-In your OpenTelemetry Collector config file, make sure to set the `exporter` to `otlp`, with the `endpoint` pointing to the Data Prepper on port `21890`. If you are running Tracetest with Docker, the endpoint might look like this `data-prepper:21890`.
+In your OpenTelemetry Collector config file, make sure to set the `exporter` to `otlp`, with the `endpoint` pointing to the Elastic APM server on port `8200`. If you are running Tracetest with Docker, the endpoint might look like this `apm-server:8200`.
 
 ```yaml
 # collector.config.yaml
@@ -23,15 +23,14 @@ receivers:
       grpc:
       http:
 
+
 processors:
   batch:
     timeout: 100ms
 
 exporters:
-  logging:
-    loglevel: debug
-  otlp/2:
-    endpoint: data-prepper:21890
+  otlp/elastic:
+    endpoint: apm-server:8200
     tls:
       insecure: true
       insecure_skip_verify: true
@@ -44,13 +43,13 @@ service:
     traces/1:
       receivers: [otlp] # your receiver
       processors: [batch] # make sure to add the batch processor
-      exporters: [otlp/2] # your exporter pointing to your Data Prepper instance
+      exporters: [otlp/elastic] # your exporter pointing to your Elastic APM server instance
 
 ```
 
-## Configure Tracetest to Use OpenSearch as a Trace Data Store
+## Configure Tracetest to Use ElasticSearch as a Trace Data Store
 
-You also have to configure your Tracetest instance to make it aware that it has to fetch trace data from OpenSearch. 
+You also have to configure your Tracetest instance to make it aware that it has to fetch trace data from ElasticSearch. 
 
 Edit your configuration file to include this configuration:
 
@@ -75,15 +74,25 @@ telemetry:
   dataStores:
     opensearch:
       type: opensearch
-      opensearch:
+      elasticsearch:
         addresses:
-          - http://opensearch:9200 # This value is from the OpenSearch data store configuration.
-        index: traces
+          - https://es01:9200
+        username: elastic
+        password: changeme
+        index: apm-*
+
+  exporters:
+    collector:
+      serviceName: tracetest
+      sampling: 100 # 100%
+      exporter:
+        type: collector
+        collector:
+          endpoint: otel-collector:4317
 
 server:
   telemetry:
     dataStore: opensearch
     exporter: collector
-    applicationExporter: collector
 
 ```
