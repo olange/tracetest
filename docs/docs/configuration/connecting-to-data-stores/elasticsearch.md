@@ -51,6 +51,10 @@ service:
 
 You also have to configure your Tracetest instance to make it aware that it has to fetch trace data from ElasticSearch. 
 
+### Web UI
+
+
+
 Edit your configuration file to include this configuration:
 
 ```yaml

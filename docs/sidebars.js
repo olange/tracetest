@@ -75,6 +75,11 @@ const sidebars = {
             },
             {
               type: "doc",
+              id: "configuration/connecting-to-data-stores/elasticsearch",
+              label: "ElasticSearch",
+            },
+            {
+              type: "doc",
               id: "configuration/connecting-to-data-stores/signalfx",
               label: "SignalFX",
             },
