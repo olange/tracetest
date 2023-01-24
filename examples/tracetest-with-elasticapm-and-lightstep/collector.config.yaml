@@ -1,0 +1,27 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+    timeout: 100ms
+
+exporters:
+  otlp/lightstep:
+    endpoint: ingest.lightstep.com:443
+    headers:
+      "lightstep-access-token": "<lightstep_access_token>"
+  otlp/elastic:
+    endpoint: apm-server:8200
+    tls:
+      insecure: true
+      insecure_skip_verify: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/elastic, otlp/lightstep]
