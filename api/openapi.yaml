@@ -1094,10 +1094,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "./config.yaml#/components/schemas/Configuration"
+                $ref: "./config.yaml#/components/schemas/ConfigurationResource"
             text/yaml:
               schema:
-                $ref: "./config.yaml#/components/schemas/Configuration"
+                $ref: "./config.yaml#/components/schemas/ConfigurationResource"
         500:
           description: "problem with getting a configuration"
     put:
@@ -1117,20 +1117,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "./config.yaml#/components/schemas/Configuration"
+              $ref: "./config.yaml#/components/schemas/ConfigurationResource"
           text/yaml:
             schema:
-              $ref: "./config.yaml#/components/schemas/Configuration"
+              $ref: "./config.yaml#/components/schemas/ConfigurationResource"
       responses:
         200:
           description: successful operation
           content:
             application/json:
               schema:
-                $ref: "./config.yaml#/components/schemas/Configuration"
+                $ref: "./config.yaml#/components/schemas/ConfigurationResource"
             text/yaml:
               schema:
-                $ref: "./config.yaml#/components/schemas/Configuration"
+                $ref: "./config.yaml#/components/schemas/ConfigurationResource"
         500:
           description: "problem with updating configuration"
 
