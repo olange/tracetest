@@ -12,10 +12,10 @@ import (
 )
 
 var Operations = []resourcemanager.Operation{
-	// resourcemanager.OperationCreate,
-	// resourcemanager.OperationDelete,
+	resourcemanager.OperationCreate,
+	resourcemanager.OperationDelete,
 	resourcemanager.OperationGet,
-	// resourcemanager.OperationList,
+	resourcemanager.OperationList,
 	resourcemanager.OperationUpdate,
 }
 
@@ -32,60 +32,40 @@ func (r *Repository) SetID(dataStore DataStore, id id.ID) DataStore {
 	return dataStore
 }
 
-const (
-	insertQuery = `
-		INSERT INTO data_stores (
-			"id",
-			"name",
-			"type",
-			"is_default",
-			"values",
-			"created_at"
-		) VALUES ($1, $2, $3, $4, $5, $6)`
-	deleteQuery = `DELETE FROM data_stores`
-	getQuery = `
-		SELECT
-			"name",
-			"type",
-			"values",
-			"created_at"
-		FROM data_stores`
-)
+const insertQuery = `
+INSERT INTO data_stores (
+	"id",
+	"name",
+	"type",
+	"is_default",
+	"values",
+	"created_at"
+) VALUES ($1, $2, $3, $4, $5, $6)`
 
-func (r *Repository) Update(ctx context.Context, updated DataStore) (DataStore, error) {
-	// enforce ID and default
-	updated.ID = "current"
-	updated.Default = true
+func (r *Repository) Create(ctx context.Context, dataStore DataStore) (DataStore, error) {
+	dataStore.ID = IDGen.ID().String()
+	dataStore.CreatedAt = time.Now()
 
 	tx, err := r.db.BeginTx(ctx, nil)
-	defer tx.Rollback()
 	if err != nil {
 		return DataStore{}, err
 	}
+	defer tx.Rollback()
 
-	_, err = tx.ExecContext(ctx, deleteQuery)
-	if err != nil {
-		return DataStore{}, fmt.Errorf("sql exec delete: %w", err)
-	}
-
-	valuesJSON, err := json.Marshal(updated.Values)
+	valuesJSON, err := json.Marshal(dataStore.Values)
 	if err != nil {
 		return DataStore{}, fmt.Errorf("could not marshal values field configuration: %w", err)
 	}
 
 	_, err = tx.ExecContext(ctx, insertQuery,
-		updated.ID,
-		updated.Name,
-		updated.Type,
-		updated.Default,
+		dataStore.ID,
+		dataStore.Name,
+		dataStore.Type,
+		dataStore.Default,
 		valuesJSON,
-		updated.CreatedAt,
+		dataStore.CreatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return DefaultDataStore, nil
-		}
-
 		return DataStore{}, fmt.Errorf("sql exec insert: %w", err)
 	}
 
@@ -94,20 +74,97 @@ func (r *Repository) Update(ctx context.Context, updated DataStore) (DataStore, 
 		return DataStore{}, fmt.Errorf("commit: %w", err)
 	}
 
-	return updated, nil
-
+	return dataStore, nil
 }
 
-func (r *Repository) Get(ctx context.Context, id id.ID) (DataStore, error) {
-	dataStore := DataStore{
-		ID:      "current",
-		Default: true,
+// on this query, we don't update created_at
+const updateQuery = `
+UPDATE data_stores SET
+	"name" = $2,
+	"type" = $3,
+	"is_default" = $4,
+	"values" = $5
+WHERE id = $1
+`
+
+func (r *Repository) Update(ctx context.Context, dataStore DataStore) (DataStore, error) {
+	oldDataStore, err := r.Get(ctx, dataStore.ID)
+	if err != nil {
+		return DataStore{}, err
 	}
 
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return DataStore{}, err
+	}
+	defer tx.Rollback()
+
+	valuesJSON, err := json.Marshal(dataStore.Values)
+	if err != nil {
+		return DataStore{}, fmt.Errorf("could not marshal values field configuration: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, updateQuery,
+		oldDataStore.ID,
+		dataStore.ID,
+		dataStore.Name,
+		dataStore.Type,
+		dataStore.Default,
+		valuesJSON,
+	)
+	if err != nil {
+		return DataStore{}, fmt.Errorf("sql exec update: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return DataStore{}, fmt.Errorf("commit: %w", err)
+	}
+
+	return demo, nil
+}
+
+const deleteQuery = `DELETE FROM data_stores WHERE "id" = $1`
+
+func (r *Repository) Delete(ctx context.Context, id id.ID) error {
+	dataStore, err := r.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, deleteQuery, dataStore.ID)
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	return nil
+}
+
+const baseGetQuery = `
+SELECT
+	"id",
+	"name",
+	"type",
+	"values",
+	"created_at"
+FROM data_stores`
+
+const getByIdQuery = baseGetQuery + `WHERE "id" = $1`
+
+func (r *Repository) Get(ctx context.Context, id id.ID) (DataStore, error) {
 	var valuesJSON []byte
 	err := r.db.
-		QueryRowContext(ctx, getQuery).
+		QueryRowContext(ctx, getByIdQuery, id).
 		Scan(
+			&dataStore.ID,
 			&dataStore.Name,
 			&dataStore.Type,
 			&valuesJSON,
@@ -128,6 +185,10 @@ func (r *Repository) Get(ctx context.Context, id id.ID) (DataStore, error) {
 	}
 
 	return dataStore, nil
+}
+
+func (r Repository) SortingFields() []string {
+	return []string{"id", "name", "type", "created_at"}
 }
 
 func (r *Repository) getParsedValues(dsType DataStoreType, valuesJSON []byte) (DataStoreValues, error) {
