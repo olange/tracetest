@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/kubeshop/tracetest/server/id"
 	"github.com/kubeshop/tracetest/server/resourcemanager"
@@ -43,7 +44,6 @@ INSERT INTO data_stores (
 ) VALUES ($1, $2, $3, $4, $5, $6)`
 
 func (r *Repository) Create(ctx context.Context, dataStore DataStore) (DataStore, error) {
-	dataStore.ID = IDGen.ID().String()
 	dataStore.CreatedAt = time.Now()
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -121,7 +121,7 @@ func (r *Repository) Update(ctx context.Context, dataStore DataStore) (DataStore
 		return DataStore{}, fmt.Errorf("commit: %w", err)
 	}
 
-	return demo, nil
+	return dataStore, nil
 }
 
 const deleteQuery = `DELETE FROM data_stores WHERE "id" = $1`
@@ -139,6 +139,9 @@ func (r *Repository) Delete(ctx context.Context, id id.ID) error {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, deleteQuery, dataStore.ID)
+	if err != nil {
+		return fmt.Errorf("sql delete: %w", err)
+	}
 
 	err = tx.Commit()
 	if err != nil {
@@ -160,19 +163,105 @@ FROM data_stores`
 const getByIdQuery = baseGetQuery + `WHERE "id" = $1`
 
 func (r *Repository) Get(ctx context.Context, id id.ID) (DataStore, error) {
-	var valuesJSON []byte
-	err := r.db.
-		QueryRowContext(ctx, getByIdQuery, id).
-		Scan(
-			&dataStore.ID,
-			&dataStore.Name,
-			&dataStore.Type,
-			&valuesJSON,
-			&dataStore.CreatedAt,
-		)
+	row := r.db.QueryRowContext(ctx, getByIdQuery, id)
 
+	dataStore, err := r.readRow(row)
 	if err != nil {
 		return DataStore{}, fmt.Errorf("sql query: %w", err)
+	}
+
+	return dataStore, nil
+}
+
+func (r Repository) SortingFields() []string {
+	return []string{"id", "name", "type", "created_at"}
+}
+
+func (r *Repository) List(ctx context.Context, take, skip int, query, sortBy, sortDirection string) ([]DataStore, error) {
+	listQuery := baseGetQuery
+
+	if sortDirection == "" {
+		sortDirection = "ASC"
+	}
+
+	if query != "" {
+		listQuery = fmt.Sprintf("%s WHERE %s", listQuery, query)
+	}
+
+	if sortBy != "" {
+		listQuery = fmt.Sprintf("%s ORDER BY %s %s", listQuery, sortBy, sortDirection)
+	}
+
+	if take > 0 {
+		listQuery = fmt.Sprintf("%s LIMIT %d", listQuery, take)
+	}
+
+	if skip > 0 {
+		listQuery = fmt.Sprintf("%s OFFSET %d", listQuery, skip)
+	}
+
+	rows, err := r.db.QueryContext(ctx, listQuery)
+	if err != nil {
+		return nil, fmt.Errorf("sql query: %w", err)
+	}
+
+	dataStores := []DataStore{}
+	for rows.Next() {
+		dataStore, err := r.readRow(rows)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil
+			}
+
+			return nil, fmt.Errorf("sql query: %w", err)
+		}
+
+		dataStores = append(dataStores, dataStore)
+	}
+
+	return dataStores, nil
+}
+
+const baseCountQuery = `SELECT COUNT(*) FROM data_stores`
+
+func (r *Repository) Count(ctx context.Context, query string) (int, error) {
+	countQuery := baseCountQuery
+
+	if query != "" {
+		countQuery = fmt.Sprintf("%s WHERE %s", countQuery, query)
+	}
+
+	count := 0
+
+	err := r.db.
+		QueryRowContext(ctx, countQuery).
+		Scan(&count)
+
+	if err != nil {
+		return 0, fmt.Errorf("sql query: %w", err)
+	}
+
+	return count, nil
+}
+
+type scanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func (r *Repository) readRow(rowScanner scanner) (DataStore, error) {
+	dataStore := DataStore{}
+
+	var valuesJSON []byte
+	err := rowScanner.Scan(
+		&dataStore.ID,
+		&dataStore.Name,
+		&dataStore.Type,
+		&valuesJSON,
+		&dataStore.CreatedAt,
+	)
+
+	if err != nil {
+		return DataStore{}, err
 	}
 
 	if string(valuesJSON) != "null" {
@@ -187,16 +276,12 @@ func (r *Repository) Get(ctx context.Context, id id.ID) (DataStore, error) {
 	return dataStore, nil
 }
 
-func (r Repository) SortingFields() []string {
-	return []string{"id", "name", "type", "created_at"}
-}
-
 func (r *Repository) getParsedValues(dsType DataStoreType, valuesJSON []byte) (DataStoreValues, error) {
 	// TODO: Marshal logic depending on type
 	return DataStoreValues{}, nil
 }
 
 func (r *Repository) Provision(ctx context.Context, dataStore DataStore) error {
-	_, err := r.Update(ctx, dataStore)
+	_, err := r.Create(ctx, dataStore)
 	return err
 }
