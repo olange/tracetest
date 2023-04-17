@@ -108,17 +108,28 @@ const TestRunEndpoint = (builder: TTestApiEndpointBuilder) => ({
     query: ({runId, testId}) => `/tests/${testId}/run/${runId}/events`,
     providesTags: [{type: TracetestApiTags.TEST_RUN, id: 'EVENTS'}],
     transformResponse: (rawTestRunEvent: TRawTestRunEvent[]) => rawTestRunEvent.map(event => TestRunEvent(event)),
-    async onCacheEntryAdded(arg, {cacheDataLoaded, cacheEntryRemoved, updateCachedData}) {
+    async onCacheEntryAdded({runId, testId}, {dispatch, cacheDataLoaded, cacheEntryRemoved, updateCachedData}) {
       const listener: IListenerFunction<TRawTestRunEvent> = data => {
         updateCachedData(draft => {
           draft.push(TestRunEvent(data.event));
         });
       };
+
+      const onInit = () => {
+        // ideally we should be using this https://redux-toolkit.js.org/rtk-query/api/created-api/api-slice-utils#invalidatetags
+        // but we don't have a way to access the API slice from here
+        dispatch({
+          type: 'tests/invalidateTags',
+          payload: [{type: TracetestApiTags.TEST_RUN, id: 'EVENTS'}],
+        });
+      };
+
       await WebSocketService.initWebSocketSubscription({
         listener,
-        resource: `test/${arg.testId}/run/${arg.runId}/event`,
+        resource: `test/${testId}/run/${runId}/event`,
         waitToCleanSubscription: cacheEntryRemoved,
         waitToInitSubscription: cacheDataLoaded,
+        onInit,
       });
     },
   }),
