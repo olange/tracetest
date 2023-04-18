@@ -111,6 +111,9 @@ func (f testRun) formatSuccessfulTest(test openapi.Test, run openapi.TestRun) st
 	buffer.WriteString(message)
 
 	for i, specResult := range run.Result.Results {
+		if i >= len(test.Specs.Specs) {
+			break
+		}
 		title := f.getTestSpecTitle(test.Specs.Specs[i].GetName(), specResult)
 		message := f.formatMessage("\t%s %s\n", PASSED_TEST_ICON, title)
 		message = f.getColoredText(true, message)

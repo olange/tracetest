@@ -1,4 +1,5 @@
 import {TRawTest} from '../../../src/models/Test.model';
+import {POKEMON_HTTP_ENDPOINT} from '../constants/Test';
 
 export const transactionTestList: TRawTest[] = [
   {
@@ -8,7 +9,7 @@ export const transactionTestList: TRawTest[] = [
       triggerType: 'http',
       triggerSettings: {
         http: {
-          url: 'http://demo-pokemon-api.demo.svc.cluster.local/pokemon/import',
+          url: `${POKEMON_HTTP_ENDPOINT}/pokemon/import`,
           method: 'POST',
           body: '{"id": 6}',
         },
@@ -22,7 +23,7 @@ export const transactionTestList: TRawTest[] = [
       triggerType: 'http',
       triggerSettings: {
         http: {
-          url: 'http://demo-pokemon-api.demo.svc.cluster.local/pokemon',
+          url: `${POKEMON_HTTP_ENDPOINT}/pokemon`,
           method: 'GET',
         },
       },
